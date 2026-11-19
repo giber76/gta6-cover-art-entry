@@ -5,7 +5,7 @@
 
 import {
   LAYOUTS, GRADES, ART_STYLES, EXPORT_SIZES,
-  blankPanel, defaultPanels, drawCover, slotRects, varyCrop,
+  blankPanel, defaultPanels, drawCover, slotRects, cropPanels,
 } from './render.js';
 import { runShot } from './shots.js';
 
@@ -15,7 +15,10 @@ const stageCtx = stage.getContext('2d');
 
 let photoSeq = 0;
 const state = {
-  layout: 'nine',
+  // The default is the tidiest layout: one strong hero, two calm panels, the
+  // caption over a scrim. A busy 3x3 grid is an option, never the first thing
+  // anyone sees.
+  layout: 'poster',
   grade: 'sunset',
   gradeStrength: 0.85,
   artStyle: 'comic',
@@ -29,25 +32,22 @@ const state = {
   titleColor: 'white',
   photos: new Map(), // id -> { id, name, img }
   photoOrder: [], // ids, tray order
-  panels: defaultPanels('nine'),
+  panels: defaultPanels('poster'),
   selected: 0,
 };
 
-// Fill every panel that is still empty with one photo, each panel showing a
-// different crop of it (varyCrop), so a cover is full from the first click.
+// Fill every panel that is still empty with one photo, each panel face-safe
+// cropped (cropPanels), so a cover is full from the first click and reads as
+// one composition, not a jumble of crops.
 function autoFillAll() {
   const heroId = state.panels.find((p) => p.photoId)?.photoId
     || state.photoOrder[0] || null;
   if (!heroId) return;
-  state.panels.forEach((p, i) => {
-    if (!p.photoId) {
-      p.photoId = heroId;
-      const crop = varyCrop(i);
-      p.zoom = crop.zoom;
-      p.panX = crop.panX;
-      p.panY = crop.panY;
-    }
+  state.panels.forEach((p) => {
+    if (!p.photoId) p.photoId = heroId;
   });
+  const { w, h } = previewSize();
+  cropPanels(state, w, h);
 }
 
 function sizeDef() {
@@ -192,13 +192,9 @@ function buildOptionButtons() {
       const heroPhoto = oldPhotos[0] || oldPhotos.find(Boolean) || null;
       state.panels.forEach((p, i) => {
         p.photoId = oldPhotos[i] || heroPhoto;
-        if (p.photoId && !oldPhotos[i]) {
-          const crop = varyCrop(i);
-          p.zoom = crop.zoom;
-          p.panX = crop.panX;
-          p.panY = crop.panY;
-        }
       });
+      const { w, h } = previewSize();
+      cropPanels(state, w, h);
       state.selected = 0;
       syncOptionButtons();
       syncPanelControls();
@@ -398,13 +394,9 @@ function wireControls() {
   $('fill-all').addEventListener('click', () => {
     const pid = state.panels[state.selected]?.photoId;
     if (!pid) return;
-    state.panels.forEach((p, i) => {
-      p.photoId = pid;
-      const crop = varyCrop(i);
-      p.zoom = crop.zoom;
-      p.panX = crop.panX;
-      p.panY = crop.panY;
-    });
+    state.panels.forEach((p) => { p.photoId = pid; });
+    const { w, h } = previewSize();
+    cropPanels(state, w, h);
     renderPreview();
   });
   $('zoom').addEventListener('input', (evt) => {

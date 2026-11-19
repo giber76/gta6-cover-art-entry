@@ -11,6 +11,15 @@
 // its own poster band (gradient sky, palm and skyline silhouettes, eyebrow,
 // gradient title, script subtitle, stars, tagline) instead of an overlay.
 export const LAYOUTS = {
+  poster: {
+    label: 'Poster',
+    hint: 'Tall hero panel, two stacked on the right',
+    slots: [
+      { x: 0.0, y: 0.0, w: 0.575, h: 1.0 },
+      { x: 0.575, y: 0.0, w: 0.425, h: 0.495 },
+      { x: 0.575, y: 0.505, w: 0.425, h: 0.495 },
+    ],
+  },
   nine: {
     label: 'Nine Up',
     hint: '3×3 grid, title panel in the middle',
@@ -48,15 +57,6 @@ export const LAYOUTS = {
       { x: 0.5, y: 0.37, w: 0.5, h: 0.35 },
     ],
     titleSlot: { x: 0.0, y: 0.73, w: 1.0, h: 0.27 },
-  },
-  poster: {
-    label: 'Poster',
-    hint: 'Tall hero panel, two stacked on the right',
-    slots: [
-      { x: 0.0, y: 0.0, w: 0.575, h: 1.0 },
-      { x: 0.575, y: 0.0, w: 0.425, h: 0.495 },
-      { x: 0.575, y: 0.505, w: 0.425, h: 0.495 },
-    ],
   },
   grid: {
     label: 'Four Up',
@@ -171,17 +171,76 @@ export function defaultPanels(layoutId) {
   return LAYOUTS[layoutId].slots.map(() => blankPanel());
 }
 
-// Deterministic per-panel crop variation, so filling every panel with one
-// photo still shows a different crop in each — the way the best covers reuse
-// one subject. Index i of the panel decides the crop, so it is stable.
+// The face anchor of each sample photo, as fractions of the photo: the
+// point every crop must keep in frame. Boulevard: the woman's face, upper
+// centre; pier: the man's face, upper centre-left. A photo the app does not
+// know gets the generic anchor (upper middle, where a face usually sits).
+export const PHOTO_FOCUS = {
+  boulevard: { x: 0.52, y: 0.2 },
+  pier: { x: 0.42, y: 0.22 },
+};
+export const DEFAULT_FOCUS = { x: 0.5, y: 0.35 };
+
+// A face-safe crop for one panel. v2's varied crops zoomed to 1.7x and panned
+// up to 0.6, which landed on torsos and cut faces in half — the cover read
+// as a jumble. v3 keeps the zoom gentle (1.0–1.15x) and computes the pan so
+// the photo's focus lands near the panel centre, with only a small
+// deterministic offset per panel for variety. The face can never be panned
+// out of frame: the pan is clamped, and at the clamp the focus still sits
+// inside the panel (upper third for a portrait photo in a wide panel).
+export function focusCrop(i, focus, imgW, imgH, rectW, rectH) {
+  const zooms = [1.0, 1.06, 1.12, 1.03, 1.09, 1.0, 1.15, 1.06];
+  const offs = [
+    [0, 0], [0.08, -0.06], [-0.08, 0.06], [0.05, 0.08],
+    [-0.05, -0.08], [0.1, 0], [0, -0.1], [-0.1, 0.05],
+  ];
+  const zoom = zooms[i % zooms.length];
+  const off = offs[i % offs.length];
+  const scale = Math.max(rectW / imgW, rectH / imgH) * zoom;
+  const dw = imgW * scale;
+  const dh = imgH * scale;
+  const ovX = Math.max(0, (dw - rectW) / 2);
+  const ovY = Math.max(0, (dh - rectH) / 2);
+  // Displayed focus x = (rectW - dw) / 2 + panX * ovX + focus.x * dw; solve
+  // for the pan that puts it at the panel centre plus the small offset.
+  const panX = ovX > 0
+    ? Math.max(-1, Math.min(1, (rectW / 2 + off[0] * rectW - (rectW - dw) / 2 - focus.x * dw) / ovX))
+    : 0;
+  const panY = ovY > 0
+    ? Math.max(-1, Math.min(1, (rectH / 2 + off[1] * rectH - (rectH - dh) / 2 - focus.y * dh) / ovY))
+    : 0;
+  return { zoom, panX, panY };
+}
+
+// A gentle crop when no focus is known: near-centred, zoom 1.0–1.12x, pans
+// within 0.12, so a panel never jumps to an unrelated detail of the photo.
 export function varyCrop(i) {
-  const zooms = [1.0, 1.35, 1.7, 1.2, 1.55, 1.1, 1.45, 1.25];
+  const zooms = [1.0, 1.06, 1.12, 1.03, 1.09, 1.0, 1.12, 1.06];
   const pans = [
-    [0, 0], [-0.55, -0.3], [0.5, 0.35], [0.3, -0.55],
-    [-0.4, 0.5], [0.6, 0.1], [-0.15, -0.6], [0.15, 0.6],
+    [0, 0], [0.1, -0.08], [-0.1, 0.08], [0.06, 0.1],
+    [-0.06, -0.1], [0.12, 0], [0, -0.12], [-0.12, 0.06],
   ];
   const p = pans[i % pans.length];
   return { zoom: zooms[i % zooms.length], panX: p[0], panY: p[1] };
+}
+
+// Re-crop every panel that holds a photo, face-safe, for a cover of w x h:
+// each panel keeps its photo's focus in frame, so a multi-panel cover reads
+// as one deliberate composition of one subject instead of a jumble of
+// unrelated crops. Photos are looked up by name for their focus anchor.
+export function cropPanels(state, w, h) {
+  const rects = slotRects(state, w, h);
+  (state.panels || []).forEach((panel, i) => {
+    if (!panel.photoId) return;
+    const photo = state.photos.get(panel.photoId);
+    if (!photo || !photo.img) return;
+    const key = (photo.name || '').replace(/\.[^.]+$/, '');
+    const focus = PHOTO_FOCUS[key] || DEFAULT_FOCUS;
+    const crop = focusCrop(i, focus, photo.img.width, photo.img.height, rects[i].w, rects[i].h);
+    panel.zoom = crop.zoom;
+    panel.panX = crop.panX;
+    panel.panY = crop.panY;
+  });
 }
 
 // ---- comic-art treatment ---------------------------------------------------
@@ -737,7 +796,9 @@ function paintBadge(ctx, w, h, frame) {
   ctx.restore();
 }
 
-// The small corner tag every overlay-caption cover carries.
+// The small corner tag every overlay-caption cover carries. Top LEFT: the
+// top right belongs to the EST. 2026 starburst, and the two must never
+// overlap (v3 caught them colliding on the poster layout).
 function paintCityTag(ctx, w, h, frame) {
   const tagSize = Math.max(13, Math.round(h * 0.022));
   const text = 'SUNSET CITY';
@@ -746,7 +807,7 @@ function paintCityTag(ctx, w, h, frame) {
   const tw = ctx.measureText(text).width;
   const padX = Math.round(tagSize * 0.9);
   const padY = Math.round(tagSize * 0.55);
-  const bx = w - frame - tw - padX * 2;
+  const bx = frame + Math.round(h * 0.012);
   const by = frame + Math.round(h * 0.012);
   ctx.fillStyle = 'rgba(10,2,18,0.78)';
   ctx.fillRect(bx, by, tw + padX * 2, tagSize + padY * 2);

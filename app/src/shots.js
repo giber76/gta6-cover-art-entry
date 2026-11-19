@@ -3,7 +3,7 @@
 // ?shot=cover shows the cover alone, edge to edge. window.__shotReady is set
 // once the cover is painted, so a screenshot never catches a half-drawn page.
 
-import { LAYOUTS, GRADES, defaultPanels, drawCover, varyCrop } from './render.js';
+import { LAYOUTS, GRADES, EXPORT_SIZES, defaultPanels, drawCover, cropPanels } from './render.js';
 
 function imageMap(state) {
   return new Map([...state.photos].map(([id, p]) => [id, p.img]));
@@ -22,47 +22,57 @@ async function paintWhenFontsReady(paint) {
   ready();
 }
 
+// The preview canvas renders at half the export size on its long side.
+function previewSizeFor(sizeId) {
+  const def = EXPORT_SIZES.find((s) => s.id === sizeId) || EXPORT_SIZES[0];
+  const scale = 960 / Math.max(def.w, def.h);
+  return { w: Math.round(def.w * scale), h: Math.round(def.h * scale) };
+}
+
 export async function runShot(shot, query, api) {
   const { state, loadSample, renderPreview, syncUI } = api;
   const caption = query.get('caption') ?? 'Sunset Heist';
   const subtitle = query.get('sub') ?? 'Ocean Drive';
-  const layout = query.get('layout') ?? 'nine';
+  // The default cover is the tidiest layout: one strong hero, two calm
+  // panels, the caption over a scrim — never the busy 3x3 grid.
+  const layout = query.get('layout') ?? 'poster';
   const grade = query.get('grade') ?? 'sunset';
   const style = query.get('style') ?? 'comic';
+  const size = query.get('size') ?? '1920x1080';
+  const [sw, sh] = size.split('x').map(Number);
+  // The cover is painted at the viewport's own pixels (capped at 1600 wide),
+  // full bleed: the screenshot shows exactly what is painted, so the crop
+  // and the paint must use the same size.
+  const coverW = Math.min(window.innerWidth, 1600);
+  const coverH = sw > 0 && sh > 0 ? Math.round((coverW * sh) / sw) : 720;
+  const viewW = shot === 'cover' ? coverW : previewSizeFor(size).w;
+  const viewH = shot === 'cover' ? coverH : previewSizeFor(size).h;
 
-  // Load the two sample photos, then place them on purpose: the sunset
-  // boulevard shot leads, the pier fills the smaller panels, every panel
-  // showing a different crop of its photo.
+  // Load both sample photos (the tray shows both), but a cover is ONE
+  // subject: every panel shows the boulevard hero, face-safe cropped, so the
+  // composition reads as one deliberate poster instead of a jumble of two
+  // different people at random crops. v2 mixed boulevard and pier across the
+  // grid and the user called it messy — v3 never mixes subjects in a cover.
   const pierId = await loadSample('pier');
   const blvdId = await loadSample('boulevard');
-  state.layout = LAYOUTS[layout] ? layout : 'nine';
+  void pierId;
+  state.layout = LAYOUTS[layout] ? layout : 'poster';
   state.grade = GRADES[grade] ? grade : 'sunset';
   state.artStyle = style;
   state.title = caption;
   state.subtitle = subtitle;
   state.panels = defaultPanels(state.layout);
-  const fill = [blvdId, pierId, blvdId, pierId, blvdId, pierId, blvdId, pierId];
-  state.panels.forEach((p, i) => {
-    p.photoId = fill[i % fill.length];
-    const crop = varyCrop(i);
-    p.zoom = crop.zoom;
-    p.panX = crop.panX;
-    // The boulevard photo is portrait: bias its crop to the top (positive
-    // panY shifts the photo down, revealing its top), so the subject's face
-    // stays in the landscape panels.
-    p.panY = p.photoId === blvdId ? 0.5 - (i % 3) * 0.15 : crop.panY;
-  });
+  state.panels.forEach((p) => { p.photoId = blvdId; });
+  cropPanels(state, viewW, viewH);
   state.selected = 0;
 
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
-    const size = query.get('size') ?? '1920x1080';
-    const [w, h] = size.split('x').map(Number);
-    if (w > 0 && h > 0) state.size = `${w}x${h}`;
+    if (sw > 0 && sh > 0) state.size = `${sw}x${sh}`;
     const stage = document.getElementById('stage');
     // Paint the cover at the viewport's own pixels, full bleed.
-    const vw = Math.min(window.innerWidth, 1600);
-    const vh = Math.round((vw * h) / w);
+    const vw = coverW;
+    const vh = coverH;
     stage.width = vw;
     stage.height = vh;
     stage.style.width = '100vw';

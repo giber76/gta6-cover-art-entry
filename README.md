@@ -12,13 +12,20 @@ in your browser. Made for the [Make GTA 6 Cover Art](https://make.fun/bounty/gta
 - **Any photo:** load your own photos from your machine (or drag and drop them),
   crop and position each one by dragging and scrolling, and fill several panels
   with one photo or several.
-- **Multi-panel covers:** seven layouts — Nine Up (3×3 with a title panel in
-  the middle), Hero Left (big hero + three stacked + title band), Title Band
-  (five photos above a full-width title band), Poster (tall hero + two
-  stacked), Four Up (2×2), Hero Strip (wide hero + two below), Split (two
-  tall panels). Layouts with a title band paint the caption as its own poster
-  strip: sunset gradient, palm and skyline silhouettes, eyebrow, gradient
-  title, script subtitle, star row and tagline.
+- **Multi-panel covers:** seven layouts — Poster (tall hero + two
+  stacked, the tidy default), Hero Left (big hero + three stacked + title
+  band), Title Band (five photos above a full-width title band), Nine Up
+  (3×3 with a title panel in the middle), Four Up (2×2), Hero Strip (wide
+  hero + two below), Split (two tall panels). Layouts with a title band paint
+  the caption as its own poster strip: sunset gradient, palm and skyline
+  silhouettes, eyebrow, gradient title, script subtitle, star row and
+  tagline.
+- **Neat by construction:** a cover is one subject, not a jumble. Every
+  panel keeps its photo's face in frame: crops are gentle (1.0–1.15x zoom)
+  and face-anchored, so a portrait photo in a wide panel still shows the
+  whole face, and a cover never mixes two different people across its
+  panels. Fill-all and the screenshot covers use one hero photo; the
+  other sample stays in the tray for the editor.
 - **Comic art:** three art styles — Comic (the photo posterised into ink art
   with edge inking, the GTA loading-screen look), Photo (grade only) and
   Halftone (comic art + print dots). The treatment is painted on canvas, so
