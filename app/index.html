@@ -1,129 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sunset Cover Studio — GTA-style cover art maker</title>
-<meta name="description" content="Turn your photo and a caption into GTA-style multi-panel cover art, offline in your browser. Export 1080×1080, 1080×1350 and 1920×1080 PNGs.">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sunset Cover Studio — GTA VI cover art maker</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<header id="topbar">
-  <div class="brand">
+  <header class="top">
     <h1>Sunset Cover Studio</h1>
-    <p>Turn your photo into GTA-style cover art — offline, in your browser.</p>
-  </div>
-  <ol id="steps" aria-label="Three steps">
-    <li><b>1</b> Add a photo</li>
-    <li><b>2</b> Pick a layout</li>
-    <li><b>3</b> Export a PNG</li>
-  </ol>
-</header>
+    <p class="sub">Build a GTA VI-style sunset cover. One subject, face-safe crops, neat by construction.</p>
+  </header>
 
-<div id="workbench">
-  <aside id="controls" aria-label="Cover controls">
-    <section id="photos-section">
-      <h2>Photos</h2>
-      <p class="hint">Your photos stay on this machine — nothing is uploaded.</p>
-      <div class="row">
-        <button id="add-photos" type="button" class="primary">Add photos…</button>
-        <input id="file-input" type="file" accept="image/*" multiple hidden>
-      </div>
-      <div class="row">
-        <button id="sample-pier" type="button">Sample: Pier</button>
-        <button id="sample-boulevard" type="button">Sample: Boulevard</button>
-      </div>
-      <div id="tray" aria-label="Loaded photos"></div>
-      <p id="tray-empty" class="hint">No photos yet — add one, or try a sample.</p>
-      <p id="panel-photo" class="hint"></p>
-      <div class="row">
-        <button id="fill-all" type="button" disabled>Fill all panels with this photo</button>
-      </div>
+  <main class="workbench">
+    <section class="stage-wrap">
+      <canvas id="stage" width="960" height="540"></canvas>
+      <p class="hint">Click a panel on the cover to select it, then adjust its crop below.</p>
     </section>
 
-    <section id="layout-section">
-      <h2>Layout</h2>
-      <div id="layout-options" class="opts" role="group" aria-label="Panel layout"></div>
-      <label class="slider-row">Zoom panel
-        <input id="zoom" type="range" min="1" max="3" step="0.05" value="1">
-        <output id="zoom-out">100%</output>
-      </label>
-      <div class="row">
-        <button id="reset-panel" type="button">Reset panel crop</button>
-      </div>
-      <p class="hint">Click a panel to select it. Drag it to move the photo, scroll to zoom.</p>
-    </section>
+    <aside class="panel">
+      <section class="group">
+        <h2>Layout</h2>
+        <div id="layout-row" class="row"></div>
+      </section>
 
-    <section id="grade-section">
-      <h2>Colour grade</h2>
-      <div id="grade-options" class="opts" role="group" aria-label="Colour grade"></div>
-      <label class="slider-row">Grade strength
-        <input id="grade-strength" type="range" min="0" max="1" step="0.05" value="0.85">
-        <output id="grade-out">85%</output>
-      </label>
-    </section>
+      <section class="group">
+        <h2>Art style</h2>
+        <div id="style-row" class="row"></div>
+      </section>
 
-    <section id="style-section">
-      <h2>Art style</h2>
-      <div id="style-options" class="opts" role="group" aria-label="Art style"></div>
-      <p class="hint">Comic turns your photo into poster ink art, the GTA loading-screen look.</p>
-    </section>
+      <section class="group">
+        <h2>Grade</h2>
+        <div id="grade-row" class="row"></div>
+      </section>
 
-    <section id="caption-section">
-      <h2>Caption</h2>
-      <label>Title
-        <input id="title" type="text" value="Sunset Heist" maxlength="48">
-      </label>
-      <label>Subtitle (script)
-        <input id="subtitle" type="text" value="Ocean Drive" maxlength="80">
-      </label>
-      <label>Tagline
-        <input id="tagline" type="text" value="One city, every light tells a story" maxlength="80">
-      </label>
-      <label class="check-row"><input id="badge" type="checkbox" checked> EST. 2026 starburst sticker</label>
-      <label class="slider-row">Title size
-        <input id="title-size" type="range" min="0.6" max="1.5" step="0.05" value="1">
-        <output id="title-size-out">100%</output>
-      </label>
-      <div class="row two">
-        <label>Position
-          <select id="title-pos">
-            <option value="bottom" selected>Bottom</option>
-            <option value="top">Top</option>
-          </select>
+      <section class="group">
+        <h2>Lettering</h2>
+        <label>Title <input id="in-title" type="text" maxlength="24"></label>
+        <label>Subtitle <input id="in-subtitle" type="text" maxlength="24"></label>
+        <label>Eyebrow <input id="in-eyebrow" type="text" maxlength="32"></label>
+        <label>Tagline <input id="in-tagline" type="text" maxlength="48"></label>
+      </section>
+
+      <section class="group">
+        <h2>Panel crop</h2>
+        <div class="panel-nav">
+          <button id="panel-prev" type="button">&larr; Prev</button>
+          <span id="panel-label">Panel 1 of 3</span>
+          <button id="panel-next" type="button">Next &rarr;</button>
+        </div>
+        <label>Zoom <span class="val">1.00&ndash;1.15</span>
+          <input id="zoom" type="range" min="1" max="1.15" step="0.01" value="1">
         </label>
-        <label>Lettering
-          <select id="title-color">
-            <option value="white" selected>White</option>
-            <option value="pink">Pink</option>
-          </select>
+        <label>Pan left / right
+          <input id="panx" type="range" min="-1" max="1" step="0.05" value="0">
         </label>
-      </div>
-    </section>
+        <label>Pan up / down
+          <input id="pany" type="range" min="-1" max="1" step="0.05" value="0">
+        </label>
+        <button id="fill-all" type="button" class="wide">Fill all panels — Boulevard Hero</button>
+      </section>
 
-    <section id="export-section">
-      <h2>Export</h2>
-      <div id="size-options" class="opts" role="group" aria-label="Export size"></div>
-      <div class="row">
-        <button id="export-one" type="button" class="primary">Export PNG</button>
-        <button id="export-all" type="button" class="primary">Export all 3 sizes</button>
-      </div>
-      <p class="hint">PNG, exact post sizes. Free, no watermark, no account.</p>
-    </section>
-  </aside>
+      <section class="group">
+        <h2>Samples</h2>
+        <div id="tray" class="tray"></div>
+        <p class="fine">Covers show the Boulevard Hero by default. Pick the pier for the selected panel only.</p>
+      </section>
 
-  <main id="preview-wrap" aria-label="Live cover preview">
-    <canvas id="stage" width="960" height="540"></canvas>
-    <p id="preview-note">Live preview — exactly what the PNG will look like.</p>
+      <section class="group">
+        <h2>Export PNG</h2>
+        <div id="export-row" class="row"></div>
+        <p class="fine">Exports render the exact cover you see, at full size. No network, no upload.</p>
+      </section>
+    </aside>
   </main>
-</div>
 
-<footer id="footnote">
-  <p>Sunset Cover Studio is an original app. It uses no Rockstar Games logo, artwork or font.
-  Lettering is set in Anton and Pacifico (SIL Open Font License, see <code>fonts/OFL.txt</code>).
-  Sample photos are image-model pictures from the make.fun kit, free to use.</p>
-</footer>
-
-<script type="module" src="src/main.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
