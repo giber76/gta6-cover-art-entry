@@ -3,7 +3,7 @@
 // ?shot=cover shows the cover alone, edge to edge. window.__shotReady is set
 // once the cover is painted, so a screenshot never catches a half-drawn page.
 
-import { LAYOUTS, GRADES, defaultPanels, drawCover } from './render.js';
+import { LAYOUTS, GRADES, defaultPanels, drawCover, varyCrop } from './render.js';
 
 function imageMap(state) {
   return new Map([...state.photos].map(([id, p]) => [id, p.img]));
@@ -16,7 +16,7 @@ function ready() {
 }
 
 async function paintWhenFontsReady(paint) {
-  try { await document.fonts.load('100px Anton'); } catch (_) { /* fallback fonts */ }
+  try { await document.fonts.load('100px Anton'); await document.fonts.load('40px Pacifico'); } catch (_) { /* fallback fonts */ }
   paint();
   try { await document.fonts.ready; paint(); } catch (_) { /* already painted */ }
   ready();
@@ -25,24 +25,33 @@ async function paintWhenFontsReady(paint) {
 export async function runShot(shot, query, api) {
   const { state, loadSample, renderPreview, syncUI } = api;
   const caption = query.get('caption') ?? 'Sunset Heist';
-  const subtitle = query.get('sub') ?? 'One last job on the boardwalk';
-  const layout = query.get('layout') ?? 'poster';
+  const subtitle = query.get('sub') ?? 'Ocean Drive';
+  const layout = query.get('layout') ?? 'nine';
   const grade = query.get('grade') ?? 'sunset';
+  const style = query.get('style') ?? 'comic';
 
   // Load the two sample photos, then place them on purpose: the sunset
-  // boulevard shot leads, the pier fills the smaller panels.
+  // boulevard shot leads, the pier fills the smaller panels, every panel
+  // showing a different crop of its photo.
   const pierId = await loadSample('pier');
   const blvdId = await loadSample('boulevard');
-  state.layout = LAYOUTS[layout] ? layout : 'poster';
+  state.layout = LAYOUTS[layout] ? layout : 'nine';
   state.grade = GRADES[grade] ? grade : 'sunset';
+  state.artStyle = style;
   state.title = caption;
   state.subtitle = subtitle;
   state.panels = defaultPanels(state.layout);
-  const hero = state.panels[0];
-  if (hero) hero.photoId = blvdId;
-  if (state.panels[1]) state.panels[1].photoId = pierId;
-  if (state.panels[2]) state.panels[2].photoId = blvdId;
-  if (state.panels[3]) state.panels[3].photoId = pierId;
+  const fill = [blvdId, pierId, blvdId, pierId, blvdId, pierId, blvdId, pierId];
+  state.panels.forEach((p, i) => {
+    p.photoId = fill[i % fill.length];
+    const crop = varyCrop(i);
+    p.zoom = crop.zoom;
+    p.panX = crop.panX;
+    // The boulevard photo is portrait: bias its crop to the top (positive
+    // panY shifts the photo down, revealing its top), so the subject's face
+    // stays in the landscape panels.
+    p.panY = p.photoId === blvdId ? 0.5 - (i % 3) * 0.15 : crop.panY;
+  });
   state.selected = 0;
 
   if (shot === 'cover') {

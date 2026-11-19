@@ -7,6 +7,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Pacifico';
+  src: url('fonts/Pacifico-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #0d0a14;
   --panel: #171226;
@@ -180,6 +188,8 @@ label input[type="text"], label select {
 .slider-row { display: flex; align-items: center; gap: 10px; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--pink); }
 .slider-row output { min-width: 44px; text-align: right; color: var(--text); }
+.check-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+.check-row input[type="checkbox"] { accent-color: var(--pink); width: 16px; height: 16px; }
 
 #preview-wrap { min-width: 0; }
 #stage {

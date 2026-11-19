@@ -4,8 +4,8 @@
 // is the same picture the PNG export writes.
 
 import {
-  LAYOUTS, GRADES, EXPORT_SIZES,
-  blankPanel, defaultPanels, drawCover, slotRects,
+  LAYOUTS, GRADES, ART_STYLES, EXPORT_SIZES,
+  blankPanel, defaultPanels, drawCover, slotRects, varyCrop,
 } from './render.js';
 import { runShot } from './shots.js';
 
@@ -15,20 +15,40 @@ const stageCtx = stage.getContext('2d');
 
 let photoSeq = 0;
 const state = {
-  layout: 'poster',
+  layout: 'nine',
   grade: 'sunset',
   gradeStrength: 0.85,
+  artStyle: 'comic',
+  badge: true,
   size: '1920x1080',
   title: 'Sunset Heist',
-  subtitle: 'One last job on the boardwalk',
+  subtitle: 'Ocean Drive',
+  tagline: 'One city, every light tells a story',
   titleSize: 1,
   titlePos: 'bottom',
   titleColor: 'white',
   photos: new Map(), // id -> { id, name, img }
   photoOrder: [], // ids, tray order
-  panels: defaultPanels('poster'),
+  panels: defaultPanels('nine'),
   selected: 0,
 };
+
+// Fill every panel that is still empty with one photo, each panel showing a
+// different crop of it (varyCrop), so a cover is full from the first click.
+function autoFillAll() {
+  const heroId = state.panels.find((p) => p.photoId)?.photoId
+    || state.photoOrder[0] || null;
+  if (!heroId) return;
+  state.panels.forEach((p, i) => {
+    if (!p.photoId) {
+      p.photoId = heroId;
+      const crop = varyCrop(i);
+      p.zoom = crop.zoom;
+      p.panX = crop.panX;
+      p.panY = crop.panY;
+    }
+  });
+}
 
 function sizeDef() {
   return EXPORT_SIZES.find((s) => s.id === state.size) || EXPORT_SIZES[0];
@@ -170,7 +190,15 @@ function buildOptionButtons() {
       // panel the new layout adds with the hero photo, so a cover never has
       // an empty hole after switching layouts.
       const heroPhoto = oldPhotos[0] || oldPhotos.find(Boolean) || null;
-      state.panels.forEach((p, i) => { p.photoId = oldPhotos[i] || heroPhoto; });
+      state.panels.forEach((p, i) => {
+        p.photoId = oldPhotos[i] || heroPhoto;
+        if (p.photoId && !oldPhotos[i]) {
+          const crop = varyCrop(i);
+          p.zoom = crop.zoom;
+          p.panX = crop.panX;
+          p.panY = crop.panY;
+        }
+      });
       state.selected = 0;
       syncOptionButtons();
       syncPanelControls();
@@ -207,11 +235,27 @@ function buildOptionButtons() {
     });
     sizeBox.append(btn);
   }
+  const styleBox = $('style-options');
+  for (const [id, def] of Object.entries(ART_STYLES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'opt';
+    btn.dataset.value = id;
+    btn.innerHTML = `<b>${def.label}</b><span>${def.hint}</span>`;
+    btn.addEventListener('click', () => {
+      state.artStyle = id;
+      syncOptionButtons();
+      renderPreview();
+    });
+    styleBox.append(btn);
+  }
 }
 
 function syncOptionButtons() {
-  for (const box of ['layout-options', 'grade-options', 'size-options']) {
-    const key = box === 'layout-options' ? state.layout : box === 'grade-options' ? state.grade : state.size;
+  for (const box of ['layout-options', 'grade-options', 'size-options', 'style-options']) {
+    const key = box === 'layout-options' ? state.layout
+      : box === 'grade-options' ? state.grade
+      : box === 'size-options' ? state.size : state.artStyle;
     $(box).querySelectorAll('.opt').forEach((b) => {
       b.classList.toggle('active', b.dataset.value === key);
     });
@@ -354,7 +398,13 @@ function wireControls() {
   $('fill-all').addEventListener('click', () => {
     const pid = state.panels[state.selected]?.photoId;
     if (!pid) return;
-    state.panels.forEach((p) => { p.photoId = pid; });
+    state.panels.forEach((p, i) => {
+      p.photoId = pid;
+      const crop = varyCrop(i);
+      p.zoom = crop.zoom;
+      p.panX = crop.panX;
+      p.panY = crop.panY;
+    });
     renderPreview();
   });
   $('zoom').addEventListener('input', (evt) => {
@@ -380,6 +430,8 @@ function wireControls() {
   });
   $('title').addEventListener('input', (evt) => { state.title = evt.target.value; renderPreview(); });
   $('subtitle').addEventListener('input', (evt) => { state.subtitle = evt.target.value; renderPreview(); });
+  $('tagline').addEventListener('input', (evt) => { state.tagline = evt.target.value; renderPreview(); });
+  $('badge').addEventListener('change', (evt) => { state.badge = evt.target.checked; renderPreview(); });
   $('title-size').addEventListener('input', (evt) => {
     state.titleSize = Number(evt.target.value);
     $('title-size-out').textContent = `${Math.round(state.titleSize * 100)}%`;
@@ -413,12 +465,17 @@ async function boot() {
     await runShot(query.get('shot'), query, { state, addPhoto, loadSample, renderPreview, exportOne, syncUI });
     return;
   }
-  // First run: load both sample photos so the cover is alive immediately.
+  // First run: load both sample photos so the cover is alive immediately,
+  // then fill every panel with varied crops of the hero photo.
   try {
     await loadSample('boulevard');
     await loadSample('pier');
+    autoFillAll();
   } catch (_) { /* samples are a bonus; the app works without them */ }
-  try { await document.fonts.load('100px Anton'); } catch (_) { /* fallback fonts */ }
+  try {
+    await document.fonts.load('100px Anton');
+    await document.fonts.load('40px Pacifico');
+  } catch (_) { /* fallback fonts */ }
   renderPreview();
   try { await document.fonts.ready; renderPreview(); } catch (_) { /* already painted */ }
 }
