@@ -1,24 +1,23 @@
-// Sunset Cover Studio — platform entrypoint (Node-safe).
+// Sunset Cover Studio — gta6-cover-art-01 entrypoint (Node 22).
 //
 // The studio is a static web app: `app/index.html` is the editor and
 // `app/src/main.js` boots it in the browser, loaded by the <script> tag
-// in index.html. This file is the entrypoint the make.fun platform runs
+// in index.html. This file is the entrypoint the make.fun grader runs
 // as `node /bot/main.ts` in a DOM-less Node environment, so it must NOT
 // import the browser editor at module load: the editor touches
 // `document` at import time and would crash the graded run with
-// "ReferenceError: document is not defined". Instead this file publishes
-// the studio's metadata for the harness and, when run directly, writes a
-// dossier plus a copy of the app into MAKEFUN_OUTPUT_DIR.
+// "ReferenceError: document is not defined" (that is what killed v6).
+// Instead this file hands the deliverable in: it copies app/ and
+// screenshots/ into the output directory and writes dossier.json with
+// the vendored make.fun library, so the judge reads exactly what is
+// handed in. Outside the grader, MAKEFUN_OUTPUT_DIR stands in for
+// /output:
+//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  writeFileSync,
-} from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildDossier } from './vendor/makefun-app.ts';
 
 export interface CoverStudioConfig {
   name: string;
@@ -32,7 +31,7 @@ export interface CoverStudioConfig {
 
 export const STUDIO_CONFIG: CoverStudioConfig = {
   name: 'Sunset Cover Studio',
-  version: '4.1.0',
+  version: '4.2.0',
   competition: 'gta6-cover-art-01',
   layouts: ['poster', 'nineup', 'heroleft', 'titleband'],
   styles: ['original', 'comic', 'halftone', 'neon'],
@@ -57,67 +56,31 @@ export function studioHandle(): SunsetCoverHandle | undefined {
 
 export default STUDIO_CONFIG;
 
-// --- Node dossier writer (runs only when executed directly) ---
+const repoRoot = fileURLToPath(new URL('.', import.meta.url));
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-function listFiles(dir: string, base: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    const rel = join(base, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...listFiles(full, rel));
-    } else {
-      out.push(rel);
-    }
-  }
-  return out.sort();
+// The scorer's own caps for this bounty: the dossier text budget, at
+// most four screenshots of at most 256 KiB, and app/ within 993 files
+// / 48 MiB.
+const dossierCaps = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  app_max_files: 993,
+  app_max_bytes: 50331648,
+  app_path_max_bytes: 1000,
+};
+
+function handIn(folder: string): number {
+  const from = join(repoRoot, folder);
+  const to = join(outputDir, folder);
+  if (!existsSync(from)) return 0;
+  mkdirSync(to, { recursive: true });
+  cpSync(from, to, { recursive: true });
+  return readdirSync(from).length;
 }
 
-function main(): void {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const outDir = resolve(
-    process.env.MAKEFUN_OUTPUT_DIR ?? join(here, 'output'),
-  );
-  mkdirSync(outDir, { recursive: true });
-
-  const appDir = join(here, 'app');
-  const appFiles = existsSync(appDir) ? listFiles(appDir, 'app') : [];
-  if (existsSync(appDir)) {
-    cpSync(appDir, join(outDir, 'app'), { recursive: true });
-  }
-
-  const shotsDir = join(here, 'screenshots');
-  const shotFiles = existsSync(shotsDir)
-    ? listFiles(shotsDir, 'screenshots')
-    : [];
-  if (existsSync(shotsDir)) {
-    cpSync(shotsDir, join(outDir, 'screenshots'), { recursive: true });
-  }
-
-  const dossier = {
-    name: STUDIO_CONFIG.name,
-    version: STUDIO_CONFIG.version,
-    competition: STUDIO_CONFIG.competition,
-    layouts: STUDIO_CONFIG.layouts,
-    styles: STUDIO_CONFIG.styles,
-    grades: STUDIO_CONFIG.grades,
-    exportSizes: STUDIO_CONFIG.exportSizes,
-    entrypoint:
-      'main.ts (Node-safe dossier writer; the browser editor loads via the <script> tag in app/index.html)',
-    files: [...appFiles, ...shotFiles],
-  };
-  const dossierPath = join(outDir, 'dossier.json');
-  writeFileSync(dossierPath, JSON.stringify(dossier, null, 2) + '\n', 'utf8');
-  console.log(
-    `Sunset Cover Studio dossier written to ${dossierPath} (${dossier.files.length} files)`,
-  );
-}
-
-// Run only when executed directly (`node main.ts`), not when imported
-// by a harness: in that case only the config + studioHandle exports
-// are used and no file work happens.
-const entryPath =
-  process.argv[1] !== undefined ? resolve(process.argv[1]) : '';
-if (entryPath === resolve(fileURLToPath(import.meta.url))) {
-  main();
-}
+mkdirSync(outputDir, { recursive: true });
+const appEntries = handIn('app');
+const shotEntries = handIn('screenshots');
+writeFileSync(join(outputDir, 'dossier.json'), buildDossier(outputDir, dossierCaps));
+console.log(`sunset-cover-studio: handed in ${appEntries} app entries and ${shotEntries} screenshots`);
